@@ -1,0 +1,73 @@
+Flume安装部署
+下载
+wget http://archive.cloudera.com/cdh5/cdh/5/flume-ng-1.6.0-cdh5.7.0.tar.gz
+解压重命名
+[root@hadoop001 software]# tar -xzvf flume-ng-1.6.0-cdh5.7.0.tar.gz
+
+[root@hadoop001 software]# mv apache-flume-1.6.0-cdh5.7.0-bin flume
+配置环境变量
+[root@ hadoop001 sqoop]$ vi /etc/profile
+
+export FLUME_HOME=/opt/software/sqoop 
+export PATH=$PATH:$FLUME_HOME/bin
+修改配置文件
+cp flume-env.sh.template flume-env.sh
+export JAVA_HOME=/usr/java/jdk
+Flume 介绍
+Flume NG是一个分布式、可靠、可用的系统，它能够将不同数据源的海量日志数据进行高效收集、聚合、移动，最后存储到一个中心化数据存储系统中。由原来的Flume OG到现在的Flume NG，进行了架构重构，并且现在NG版本完全不兼容原来的OG版本。经过架构重构后，Flume NG更像是一个轻量的小工具，非常简单，容易适应各种方式日志收集，并支持failover和负载均衡。
+
+使用场景
+
+
+flume->HDFS->batch
+
+flume->kafka->streaming
+
+基本架构
+Flume基本架构
+Flume基本架构
+
+Event的概念
+flume中event的相关概念：flume的核心是把数据从数据源(source)收集过来，在将收集到的数据送到指定的目的地(sink)。为了保证输送的过程一定成功，在送到目的地(sink)之前，会先缓存数据(channel),待数据真正到达目的地(sink)后，flume在删除自己缓存的数据。
+在整个数据的传输的过程中，流动的是event，即事务保证是在event级别进行的。那么什么是event呢？—–event将传输的数据进行封装，是flume传输数据的基本单位，如果是文本文件，通常是一行记录，event也是事务的基本单位。event从source，流向channel，再到sink，本身为一个字节数组，并可携带headers(头信息)信息。event代表着一个数据的最小完整单元，从外部数据源来，向外部的目的地去。
+
+flume三大核心组件
+flume之所以这么神奇，是源于它自身的一个设计，这个设计就是agent，agent本身是一个java进程，运行在日志收集节点—所谓日志收集节点就是服务器节点。
+
+Source：负责从源端采集数据，输出到channel中，常用的Source有exec/Spooling Directory/Taildir Source/NetCat
+
+Channel：负责缓存Source端来的数据，常用的Channel有Memory/File
+
+Sink：处理Channel而来的数据写到目标端，常用的Sink有HDFS/Logger/Avro/Kafka
+
+Source
+Flume Source
+Flume Source
+
+Sink
+Flume Sink
+Flume Sink
+
+Channel
+Flume Channel
+Flume Channel
+
+Source+Channel+Sink=Agent,数据以event的形式从Source传送到Sink端，Flume就是写配置文件把我们的三大核心组件拼接起来，使用方便，可配置的、可插拔的、可组装的。
+
+File Channel VS Memory Channel
+File Channel是一个持久化的隧道（channel），他持久化所有的事件，并将其存储到磁盘中。因此，即使Java 虚拟机当掉，或者操作系统崩溃或重启，再或者事件没有在管道中成功地传递到下一个代理（agent），这一切都不会造成数据丢失。Memory Channel是一个不稳定的隧道，其原因是由于它在内存中存储所有事件。如果java进程死掉，任何存储在内存的事件将会丢失。另外，内存的空间收到RAM大小的限制,而File Channel这方面是它的优势，只要磁盘空间足够，它就可以将所有事件数据存储到磁盘上。
+
+Flume常用模式
+扇入
+Flume扇入
+Flume扇入
+
+
+注意：
+
+多个sink节点写入一个source是为了减少同时写入hdfs上的压力；
+
+多个agent进行串联时，前一个agent的Sink和后一个agent的Source都要采用Avro的形式。
+扇出
+Flume扇出
+Flume扇出
