@@ -1,0 +1,344 @@
+Flume使用案例
+官网地址
+
+Source（NetCat） Sink（logger） Channel（memory）
+NetCat Source：监听一个指定的网络端口，即只要应用程序向这个端口里面写数据，这个source组件就可以获取到信息。
+
+Property Name Default     Description
+channels       –     
+type           –     The component type name, needs to be netcat
+bind           –  日志需要发送到的主机名或者Ip地址，该主机运行着netcat类型的source在监听          
+port           –  日志需要发送到的端口号，该端口号要有netcat类型的source在监听 
+配置
+
+vi hello.ctest.confonf
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = netcat
+a1.sources.r1.bind = 0.0.0.0
+a1.sources.r1.port = 44444
+
+# Describe the sink
+a1.sinks.k1.type = logger
+
+# Use a channel which buffers events in memory
+a1.channels.c1.type = memory
+
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+帮助命令
+
+flume-ng help        
+启动命令
+
+./flume-ng agent --name a1 --conf $FLUME_HOME/conf --conf-file $FLUME_HOME/conf/test.conf -Dflume.root.logger=INFO,console
+
+--name agent的名字
+--conf conf目录
+--conf-file 配置文件所在目录
+-Dflume.root.logger=INFO,console 可以再控制台查看
+测试
+
+[root@hadoop001 ~]$ telnet localhost 44444
+Trying ::1...
+Connected to localhost.
+Escape character is '^]'.
+hello
+OK
+wold
+OK    
+Source（NetCat） Sink（hdfs） Channel（file）
+将日志写入到hdfs上
+
+配置
+
+vi test1.conf
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = netcat
+a1.sources.r1.bind = 0.0.0.0
+a1.sources.r1.port = 44444
+
+# Describe the sink
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = hdfs://hadoop:9000/flume/
+a1.sinks.k1.hdfs.writeFormat = Text
+a1.sinks.k1.hdfs.fileType = DataStream
+a1.sinks.k1.hdfs.rollInterval = 10
+a1.sinks.k1.hdfs.rollSize = 0
+a1.sinks.k1.hdfs.rollCount = 0
+a1.sinks.k1.hdfs.filePrefix = %Y-%m-%d-%H-%M-%S
+a1.sinks.k1.hdfs.useLocalTimeStamp = true
+
+# Use a channel which buffers events in file
+a1.channels.c1.type = file
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+启动命令
+
+./flume-ng agent --name a1 --conf $FLUME_HOME/conf --conf-file $FLUME_HOME/conf/test1.conf   -Dflume.root.logger=DEBUG,console
+
+2017-12-10 18:55:57,906 (lifecycleSupervisor-1-3) [DEBUG - org.apache.flume.source.NetcatSource.start(NetcatSource.java:190)] Source started
+2017-12-10 18:55:57,907 (Thread-2) [DEBUG - org.apache.flume.source.NetcatSource$AcceptHandler.run(NetcatSource.java:270)] Starting accept handler    
+测试
+
+[root@hadoop001 ~]$ telnet localhost 44444
+Trying ::1...
+Connected to localhost.
+Escape character is '^]'.
+hello world
+OK
+
+hdfs dfs -text /flume/2017-12-10-19-05-47.1524366347156
+hello world    
+Source（Spooling Directory) Sink（hdfs) Channel（memory）
+Spooling Directory Source：监听一个指定的目录，即只要应用程序向这个指定的目录中添加新的文件，source组件就可以获取到该信息，并解析该文件的内容，然后写入到channle。写入完成后，标记该文件已完成或者删除该文件。
+官网介绍，其可靠性较强，而且即使flume重启，也不会丢失数据，为了保证可靠性，只能是不可变的，唯一命名的文件可以放在目录下，日常来说，我们可以通过log4j来定义日志名称，这样基本不会重名，而且日志文件生成之后，一般来说都不会更改，所以离线数据处理，很适合使用本Source；
+
+flume官网中Spooling Directory Source描述：
+
+Property Name       Default      Description
+channels              –  
+type                  –          The component type name, needs to be spooldir.
+spoolDir              –          Spooling Directory Source监听的目录
+fileSuffix         .COMPLETED    文件内容写入到channel之后，标记该文件
+deletePolicy       never         文件内容写入到channel之后的删除策略: never or immediate
+fileHeader         false         Whether to add a header storing the absolute path filename.
+ignorePattern      ^$           Regular expression specifying which files to ignore (skip)
+interceptors          –          指定传输中event的head(头信息)，常用timestamp
+
+Spooling Directory Source的注意事项：
+拷贝到spool目录下的文件不可以再打开编辑
+
+不能将具有相同文件名字的文件拷贝到这个目录下
+
+配置
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = spooldir
+a1.sources.r1.spoolDir = /home/hadoop/inputfile
+a1.sources.r1.fileHeader = true
+a1.sources.r1.interceptors = i1
+a1.sources.r1.interceptors.i1.type = timestamp
+
+# Describe the sink
+# Describe the sink
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = hdfs://hadoop:9000/flume/
+a1.sinks.k1.hdfs.writeFormat = Text
+a1.sinks.k1.hdfs.fileType = DataStream
+a1.sinks.k1.hdfs.rollInterval = 10
+a1.sinks.k1.hdfs.rollSize = 0
+a1.sinks.k1.hdfs.rollCount = 0
+a1.sinks.k1.hdfs.filePrefix = %Y-%m-%d-%H-%M-%S
+a1.sinks.k1.hdfs.useLocalTimeStamp = true
+
+# Use a channel which buffers events in file
+a1.channels.c1.type = file
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+启动
+
+./flume-ng agent --name a1 --conf $FLUME_HOME/conf --conf-file $FLUME_HOME/conf/test2.conf  -Dflume.root.logger=INFO,console
+
+2017-12-10 19:52:14,083 (lifecycleSupervisor-1-0) [INFO - org.apache.flume.channel.file.FileChannel.start(FileChannel.java:301)] Queue Size after replay: 0 [channel=c1]
+2017-12-10 19:52:14,186 (lifecycleSupervisor-1-0) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.register(MonitoredCounterGroup.java:120)] Monitored counter group for type: CHANNEL, name: c1: Successfully registered new MBean.
+2017-12-10 19:52:14,188 (lifecycleSupervisor-1-0) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.start(MonitoredCounterGroup.java:96)] Component type: CHANNEL, name: c1 started
+2017-12-10 19:52:14,188 (conf-file-poller-0) [INFO - org.apache.flume.node.Application.startAllComponents(Application.java:173)] Starting Sink k1
+2017-12-10 19:52:14,190 (conf-file-poller-0) [INFO - org.apache.flume.node.Application.startAllComponents(Application.java:184)] Starting Source r1
+2017-12-10 19:52:14,190 (lifecycleSupervisor-1-3) [INFO - org.apache.flume.source.SpoolDirectorySource.start(SpoolDirectorySource.java:78)] SpoolDirectorySource source starting with directory: /home/hadoop/inputfile
+2017-12-10 19:52:14,200 (lifecycleSupervisor-1-1) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.register(MonitoredCounterGroup.java:120)] Monitored counter group for type: SINK, name: k1: Successfully registered new MBean.
+2017-12-10 19:52:14,201 (lifecycleSupervisor-1-1) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.start(MonitoredCounterGroup.java:96)] Component type: SINK, name: k1 started
+2017-12-10 19:52:14,240 (lifecycleSupervisor-1-3) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.register(MonitoredCounterGroup.java:120)] Monitored counter group for type: SOURCE, name: r1: Successfully registered new MBean.
+2017-12-10 19:52:14,241 (lifecycleSupervisor-1-3) [INFO - org.apache.flume.instrumentation.MonitoredCounterGroup.start(MonitoredCounterGroup.java:96)] Component type: SOURCE, name: r1 started
+
+
+cp input.txt ../inputfile/
+结果
+
+[root@hadoop001 conf]$ hdfs dfs -text /flume/2017-12-10-19-53-24.1524369204246 
+hello java
+[root@hadoop001 conf]$ hdfs dfs -text /flume/2017-12-10-19-53-26.1524369206318
+hello hadoop
+hello hive
+hello sqoop
+hello hdfs
+hello spark
+Source（Exec Source ) Sink（hdfs) Channel（memory）
+Exec Source：监听一个指定的命令，获取一条命令的结果作为它的数据源
+常用的是tail -F file指令，即只要应用程序向日志(文件)里面写数据，source组件就可以获取到日志(文件)中最新的内容 。
+
+配置
+
+# Name the components on this agent
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+# Describe/configure the source
+a1.sources.r1.type = exec
+a1.sources.r1.command = tail -F /home/hadoop/data/data.log
+
+# Describe the sink
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = hdfs://hadoop:9000/flume
+a1.sinks.k1.hdfs.writeFormat = Text
+a1.sinks.k1.hdfs.fileType = DataStream
+a1.sinks.k1.hdfs.rollInterval = 10
+a1.sinks.k1.hdfs.rollSize = 0
+a1.sinks.k1.hdfs.rollCount = 0
+a1.sinks.k1.hdfs.filePrefix = %Y-%m-%d-%H-%M-%S
+a1.sinks.k1.hdfs.useLocalTimeStamp = true
+
+
+# Use a channel which buffers events in memory
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=10000
+a1.channels.c1.transactionCapacity=1000
+
+# Bind the source and sink to the channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+在hive中建立外部表hdfs://hadoop001:9000/flume的目录，方便查看日志捕获内容
+
+create external table t1(infor  string)
+row format delimited
+fields terminated by '\t'
+location '/flume/';
+启动
+
+./flume-ng agent --name a1 --conf $FLUME_HOME/conf --conf-file $FLUME_HOME/conf/test3.conf  -Dflume.root.logger=INFO,console
+
+echo hadoop >data.log    
+结果
+
+hdfs：
+
+[root@hadoop001 ~]$ hdfs dfs -text /flume/2017-12-10-20-13-38.1524370418338 
+hadoop
+hive:
+
+hive> select * from t1;
+OK
+hello world
+hello java
+hello hadoop
+hello hive
+hello sqoop
+hello hdfs
+hello spark
+hadoop        
+Exec source：
+
+Exec source和Spooling Directory Source是两种常用的日志采集的方式，其中Exec source可以实现对日志的实时采集，Spooling Directory Source在对日志的实时采集上稍有欠缺，尽管Exec source可以实现对日志的实时采集，但是当Flume不运行或者指令执行出错时，Exec source将无法收集到日志数据，日志会出现丢失，从而无法保证收集日志的完整性。
+
+一台机器向另一台机器的文件传输（Avro）
+A机器：avro-client
+
+B机器：avro-source ==> channel（memory） ==>sink(logger)
+
+A机器向B机器传输日志
+
+B机器配置文件
+
+a1.sources=r1
+a1.sinks=k1
+a1.channels=c1
+
+a1.sources.r1.type=avro
+a1.sources.r1.bind=0.0.0.0  
+a1.sources.r1.port=44444  
+
+a1.channels.c1.type=memory
+
+
+a1.sinks.k1.type=logger
+
+a1.sinks.k1.channel=c1
+a1.sources.r1.channels=c1
+执行命令
+
+./flume-ng agent \
+--name a1 \
+--conf $FLUME_HOME/conf \
+--conf-file $FLUME_HOME/conf/avro.conf \
+-Dflume.root.logger=INFO,console
+在A机器上执行：
+
+./flume-ng avro-client --host 0.0.0.0 --port 44444  --filename /home/hadoop/data/input.txt
+注意：这种方式只能传一次，完了就会中断。这种方式在生产上肯定是不行的，那该如何是好呢，下面我们介绍另外一种方式。
+
+A机器到B机器的文件传输（avro），不中断
+A机器的agent
+
+a1.sources=r1
+a1.sinks=k1
+a1.channels=c1
+
+
+a1.sources.r1.type=exec
+a1.sources.r1.command=tail -F /home/hadoop/data/data.log 
+a1.channels.c1.type=memory
+
+a1.sinks.k1.type=avro
+a1.sinks.k1.bind=0.0.0.0    //与B机器像对应
+a1.sinks.k1.port=44444       //与B机器相对应
+
+a1.sinks.k1.channel=c1
+a1.sources.r1.channels=c1
+B机器的agent
+
+b1.sources=r1
+b1.sinks=k1
+b1.channels=c1
+
+b1.sources.r1.type=avro
+a1.sources.r1.bind = 0.0.0.0   //与A机器像对应
+a1.sources.r1.port = 44444    //与A机器像对应
+
+b1.channels.c1.type=memory
+
+b1.sinks.k1.type=logger
+
+b1.sinks.k1.channel=c1
+b1.sources.r1.channels=c1    
+执行命令
+
+B机器
+
+./flume-ng agent \
+--name b1 \
+--conf $FLUME_HOME/conf \
+--conf-file $FLUME_HOME/conf/avro_source.conf \
+-Dflume.root.logger=INFO,console
+A机器
+
+ ./flume-ng agent \
+--name a1 \
+--conf $FLUME_HOME/conf \
+--conf-file $FLUME_HOME/conf/avro_sink.conf \
+-Dflume.root.logger=INFO,console     
+
+[root@hadoop001 data]$ echo aaa > data.log 
+[root@hadoop001 data]$ echo 112121 > data.log 
+A机器目标目录下文件内容会被打印在B机器的控制台上
